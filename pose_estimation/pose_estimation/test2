@@ -1,0 +1,33 @@
+import rclpy
+from sensor_msgs.msg import PointCloud2, PointField
+import numpy as np
+import open3d as o3d
+
+def transform_point_cloud(points):
+    # Extraer las coordenadas xyz
+    xyz = points[:, :3]
+
+    # Crear un objeto PointCloud en Open3D
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(xyz)
+
+    return pcd
+
+def callback(msg):
+    # Convertir el mensaje PointCloud2 a una matriz NumPy
+    points = np.frombuffer(msg.data, dtype=np.float32).reshape(-1, msg.point_step // 4)
+
+    # Realizar la transformación de la nube de puntos
+    pcd = transform_point_cloud(points)
+
+    # Visualizar la nube de puntos transformada
+    o3d.visualization.draw_geometries([pcd])
+
+def main():
+    rclpy.init()
+    node = rclpy.create_node('pointcloud_subscriber')
+    subscriber = node.create_subscription(PointCloud2, '/camera/depth/color/points', callback, 10)
+    rclpy.spin(node)
+
+if __name__ == '__main__':
+    main()

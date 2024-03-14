@@ -1,0 +1,57 @@
+import rclpy
+from sensor_msgs.msg import PointCloud2, PointField
+import numpy as np
+import open3d as o3d
+
+class PointCloudHandler:
+    def __init__(self):
+        self.node = rclpy.create_node('pointcloud_handler')
+        self.subscriber = self.node.create_subscription(PointCloud2, '/camera/depth/color/points', self.callback, 10)
+        self.publisher = self.node.create_publisher(PointCloud2, 'new_point_cloud', 10)
+
+    def transform_point_cloud(self, points):
+        # Extraer las coordenadas xyz
+        xyz = points[:, :3]
+
+        # Crear un objeto PointCloud en Open3D
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(xyz)
+
+        return pcd
+
+    def callback(self, msg):
+        # Convertir el mensaje PointCloud2 a una matriz NumPy
+        points = np.frombuffer(msg.data, dtype=np.float32).reshape(-1, msg.point_step // 4)
+
+        # Realizar la transformación de la nube de puntos
+        pcd = self.transform_point_cloud(points)
+
+        # Visualizar la nube de puntos transformada
+        o3d.visualization.draw_geometries([pcd])
+
+        # Convertir la nube de puntos de Open3D a un mensaje PointCloud2 de ROS2
+        new_msg = PointCloud2()
+        new_msg.header = msg.header
+        new_msg.height = 1
+        new_msg.width = pcd.points.shape[0]
+        new_msg.fields = [PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
+                          PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
+                          PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1)]
+        new_msg.is_bigendian = False
+        new_msg.point_step = 12
+        new_msg.row_step = new_msg.point_step * pcd.points.shape[0]
+        new_msg.is_dense = True
+        new_msg.data = np.asarray(pcd.points).astype(np.float32).tobytes()
+
+        # Publicar la nueva nube de puntos
+        self.publisher.publish(new_msg)
+        self.node.get_logger().info('Publicando nube de puntos transformada')
+
+def main(args=None):
+    rclpy.init(args=args)
+    pointcloud_handler = PointCloudHandler()
+    rclpy.spin(pointcloud_handler.node)
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
