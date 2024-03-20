@@ -3,6 +3,7 @@
 # Description: node for testing
 from typing import Iterable, List, NamedTuple, Optional
 import open3d as o3d
+from ament_index_python import get_package_share_directory
 import os
 from sensor_msgs.msg import PointCloud2, PointField
 import std_msgs.msg
@@ -30,13 +31,13 @@ class Class_name(Node):
         
         # Define constants
         self.clock = Clock()
-        pkg_path = '/home/enrico/pose_estimation_ws/src/pose_estimation'
-        mesh_path = pkg_path+"/pose_estimation/red_pepper.stl"
+        pkg_path = self.get_pkg_path(target='pose_estimation')
+        mesh_path = pkg_path+"/scaled_centered.stl"
         number_of_points = 10000 # Ajust this number as you find it convenient.
         ideal_pepper = o3d.io.read_triangle_mesh(mesh_path)
         self.ideal_pepper = ideal_pepper.sample_points_poisson_disk(number_of_points)
         self.timer_period = 0.5
-        self.timer = self.create_timer(self.timer_period, self.main_loop)
+        self.timer = self.create_timer(self.timer_period, self.processing_method)
 
 
         # Create publishers
@@ -50,7 +51,25 @@ class Class_name(Node):
         
         # Create subscribers
         self.sub_point_cloud = self.create_subscription(PointCloud2,'/camera/depth/color/points', self.point_cloud_callback, 10)
-    
+
+    def get_pkg_path(self,target='size_estimation'):
+        # Get exc path
+        pkg_path = get_package_share_directory(target)
+
+        # Converting to list
+        parts = pkg_path.split('/')
+
+        # Directing to the src folder
+        replace = 'install'
+        idx = parts.index(replace)
+        parts[idx] = 'src'
+        parts.remove('share')
+
+        # Converting back to string
+        path = '/'.join(parts)
+
+        return path
+
     def ros2o3d(self, points):
         # Extraer las coordenadas xyz
         xyz = points[:, :3]
@@ -95,12 +114,6 @@ class Class_name(Node):
         scaled_model = point_cloud.scale(scale_factor, reference)
         return scaled_model
 
-    def pepper_pre_process(self):
-        self.get_logger().info("Centering point cloud...")
-        self.ideal_pepper = self.centering(self.ideal_pepper)
-        self.get_logger().info("Scaling point cloud...")
-        self.ideal_pepper = self.scale(self.ideal_pepper,scale_factor=0.001)
-
     def point_cloud_callback(self,msg):
         # Convertir el mensaje PointCloud2 a una matriz NumPy
         points = np.frombuffer(msg.data, dtype=np.float32).reshape(-1, msg.point_step // 4)
@@ -109,7 +122,7 @@ class Class_name(Node):
         pcd = self.ros2o3d(points)
 
         # Visualizar la nube de puntos transformada
-        o3d.visualization.draw_geometries([pcd])
+        # o3d.visualization.draw_geometries([pcd])
 
 
         self.scene_pointcloud = self.centering(pcd)
@@ -269,25 +282,18 @@ class Class_name(Node):
         msg.data = points.tobytes()
         return msg
 
-    def main_loop(self):
-        self.pepper_pre_process()
+    def processing_method(self):
+        if self.start:
+            print('Waiting ...')
+            return
         self.get_logger().info("Transforming open3D pc to Point Cloud2 msg...")
-        self.get_logger().info("Publishing msg.")
-        
-        while rclpy.ok():
-            if self.start:
-                print('Waiting')
-                return
-            self.get_logger().info("Pose register init")
-            print("begin")
-            self.get_logger().info("Transforming open3D pc to Point Cloud2 msg...")
-            complete_scene = self.o3d2ros(self.scene_pointcloud,frame_id="camera_depth_frame")
-            self.pub_rgbd.publish(complete_scene)
-            # segmented_msg = self.o3dpc_to_rospc(self.segmented_point_cloud,frame_id="camera_depth_frame")
-            # self.pub_segmented_img.publish(segmented_msg)
-            # self.calc_pose = self.pose_register(self.ideal_pepper,self.segmented_point_cloud)
-            # pose_msg = self.o3dpc_to_rospc(self.calc_pose,frame_id="camera_depth_frame")
-            # self.pub_pose_estimation.publish(pose_msg)
+        complete_scene = self.o3d2ros(self.scene_pointcloud,frame_id="camera_depth_frame")
+        self.pub_rgbd.publish(complete_scene)
+        # segmented_msg = self.o3dpc_to_rospc(self.segmented_point_cloud,frame_id="camera_depth_frame")
+        # self.pub_segmented_img.publish(segmented_msg)
+        # self.calc_pose = self.pose_register(self.ideal_pepper,self.segmented_point_cloud)
+        # pose_msg = self.o3dpc_to_rospc(self.calc_pose,frame_id="camera_depth_frame")
+        # self.pub_pose_estimation.publish(pose_msg)
 
 def main(args=None):
     # Required lines for any node
