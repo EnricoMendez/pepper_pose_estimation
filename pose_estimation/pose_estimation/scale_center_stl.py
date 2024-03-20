@@ -42,7 +42,7 @@ if __name__ == "__main__":
     output_file = "scaled_centered.stl"
     
     # Factor de escala (ajústalo según sea necesario)
-    scale_factor = 0.01
+    scale_factor = 0.001
 
     # Procesar el archivo STL
     center_and_scale_stl(input_file, output_file, scale_factor)
